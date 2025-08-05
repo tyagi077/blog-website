@@ -1,0 +1,329 @@
+const { Op } = require('sequelize');
+
+const { Blog, Sector, User } = require('../models');
+
+const UserSector = require('../models/UserSector');
+
+
+const getBlog = async (req, res) => {
+   try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    let blogs;
+
+    if (userRole === 'admin') {
+      // Get sectors where admin is assigned
+      const userSectors = await UserSector.findAll({
+        where: { user_id: userId },
+        attributes: ['sector_id']
+      });
+
+      const sectorIds = userSectors.map(us => us.sector_id);
+
+      // Get approved blogs in those sectors
+      blogs = await Blog.findAll({
+        where: {
+          sector_id: sectorIds,
+          approved_by: { [Op.ne]: null } // approved
+        },
+        include: [
+          { model: Sector },
+          { model: User, attributes: ['id', 'name'] }
+        ]
+      });
+
+    } else {
+      // For normal user: only their own approved blogs or public approved blogs
+      blogs = await Blog.findAll({
+        where: {
+          approved_by: { [Op.ne]: null },
+          [Op.or]: [
+            { user_id: userId },
+            { scope: 'public' }
+          ]
+        },
+        include: [
+          { model: Sector },
+          { model: User, attributes: ['id', 'name'] }
+        ]
+      });
+    }
+
+    res.status(200).json({ blogs });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch blogs', details: err.message });
+  }
+};
+
+
+const getPendingBlogs = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    if (userRole !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Only admins can view pending blogs.' });
+    }
+
+    // Get sectors assigned to this admin
+    const userSectors = await UserSector.findAll({
+      where: { user_id: userId },
+      attributes: ['sector_id']
+    });
+
+    const sectorIds = userSectors.map(us => us.sector_id);
+
+    // Get unapproved blogs in those sectors
+    const pendingBlogs = await Blog.findAll({
+      where: {
+        sector_id: sectorIds,
+        approved_by: null
+      },
+      include: [
+        { model: Sector },
+        { model: User, attributes: ['id', 'name'] }
+      ]
+    });
+
+    res.status(200).json({ pendingBlogs });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch pending blogs', details: err.message });
+  }
+};
+
+
+const getPendingBlogsPage = async (req, res) => {
+  try {
+    console.log("Logged-in user:", req.user);
+
+    const adminId = req.user?.id;
+    const adminRole = req.user?.role;
+
+    if (adminRole !== 'admin') {
+      return res.status(403).send('Access denied');
+    }
+
+    const assignedSectors = await UserSector.findAll({
+      where: { user_id: adminId },
+      attributes: ['sector_id']
+    });
+    const sectorIds = assignedSectors.map(s => s.sector_id);
+    console.log("Assigned Sectors:", assignedSectors);
+    console.log("Extracted Sector IDs:", sectorIds);
+
+    const blogs = await Blog.findAll({
+      where: {
+        approved_by: null,
+        sector_id: sectorIds
+      },
+      include: [
+        { model: Sector },
+        { model: User, attributes: ['name'] }
+      ]
+    });
+    console.log("Pending Blogs:", blogs);
+
+    res.render('approvedBlogs', { blogs, user: req.user });
+  } catch (err) {
+    console.error("Error fetching pending blogs:", err);
+    res.status(500).send("Internal Server Error");
+  }
+};
+
+const approveBlog = async (req, res) => {
+  try {
+    console.log("sasa");
+    const blogId = req.params.id;
+    const adminId = req.user?.id;
+    const adminRole = req.user?.role;
+
+    if (adminRole !== 'admin') {
+      return res.status(403).send('Only admins can approve blogs');
+    }
+
+    // Get blog and check if admin is allowed to approve it
+    const blog = await Blog.findByPk(blogId);
+    const allowedSectors = await UserSector.findAll({
+      where: { user_id: adminId },
+      attributes: ['sector_id']
+    });
+    const sectorIds = allowedSectors.map(s => s.sector_id);
+
+    if (!blog || !sectorIds.includes(blog.sector_id)) {
+      return res.status(403).send('You cannot approve this blog');
+    }
+
+    blog.approved_by = adminId;
+    await blog.save();
+
+    res.redirect('/blogs/approved-blogs');
+  } catch (err) {
+    console.error('Approval Error:', err);
+    res.status(500).send('Internal Server Error');
+  }
+};
+
+
+
+const createBlog = async (req, res) => {
+  try {
+    const image = req.file?.filename; // from multer
+    const { title, description, sector_id, scope } = req.body;
+
+    const user_id = req.user?.id; // assuming req.user is set by JWT middleware
+    const updated_by = req.user?.id;
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'User not authenticated' });
+    }
+
+    const blog = await Blog.create({
+      title,
+      description,
+      image: `/uploads/${image}`,
+      sector_id,
+      user_id,
+      scope,
+      updated_by
+    });
+
+  res.redirect('/blogs/allBlogs');
+  } catch (err) {
+    res.status(500).json({ error: 'Internal Server Error', details: err.message });
+  }
+};
+
+
+// Route to render the blog creation form
+const getblogPage= async (req, res) => {
+  try {
+    const sectors = await Sector.findAll(); // fetch sectors to populate the dropdown
+    res.render('createBlog', { sectors,user:req.user });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Failed to load blog form");
+  }
+};
+
+const getAddSectorPage = (req, res) => {
+  res.render('addSector', { user: req.user }); // Add user if needed
+};
+
+const addSector = async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    // Check if sector already exists
+    const existing = await Sector.findOne({ where: { name } });
+    if (existing) {
+      return res.status(400).send('Sector already exists');
+    }
+
+    await Sector.create({ name });
+    res.redirect('/blogs/allBlogs'); // or res.redirect('/dashboard/add-sector') to show form again
+  } catch (error) {
+    console.error('Error adding sector:', error);
+    res.status(500).send('Internal Server Error');
+  }
+};
+
+const myBlogsPage = async (req, res) => {
+  try {
+    const userId =req.user.id // Assuming user is available from middleware
+
+    const blogs = await Blog.findAll({
+      where: { user_id: userId },
+      include: [{ model: Sector }]
+    });
+
+    res.render('myBlogs', { blogs, user: req.user });
+  } catch (error) {
+    console.error('Error fetching user blogs:', error);
+    res.status(500).send('Internal Server Error');
+  }
+};
+
+
+const getApprovedBlogsPage = async (req, res) => {
+  try {
+    const loggedInUserId = req.user?.id;
+
+    if (!loggedInUserId) {
+      return res.status(401).send("Unauthorized");
+    }
+
+    const blogs = await Blog.findAll({
+      where: {
+        user_id: loggedInUserId,
+        approved_by: { [Op.ne]: null }
+      },
+      include: [
+        { model: Sector },
+        { model: User, as: 'Approver', attributes: ['name'] },  // Approver info
+        { model: User, attributes: ['name'], required: false }  // Author info
+      ]
+    });
+
+    res.render('approvedBlogs', { blogs, user: req.user || null });
+  } catch (err) {
+    console.error('Error fetching approved blogs:', err);
+    res.status(500).send('Internal Server Error');
+  }
+};
+
+
+const getAllPublicApprovedBlogs= async (req, res) => {
+  try {
+    const blogs = await Blog.findAll({
+      where: {
+        scope: 'public',
+        approved_by: { [Op.ne]: null }
+      },
+      include: [
+        {
+          model: Sector,
+          attributes: ['id', 'name']
+        },
+        {
+          model: User,
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+
+    res.render('blogs', { blogs, user: req.user });
+  } catch (err) {
+    console.error('❌ Error in GET /:', err);
+    res.status(500).send('Error loading homepage');
+  }
+};
+
+
+const getBlogDetails = async (req, res) => {
+  try {
+    const blog = await Blog.findOne({
+      where: { id: req.params.id },
+      include: [
+        { model: Sector },
+        { model: User, attributes: ['name'] }
+      ]
+    });
+
+    if (!blog) {
+      return res.status(404).send('Blog not found');
+    }
+
+    res.render('blogDetails', { blog, user: req.user || null });
+  } catch (err) {
+    console.error('Error fetching blog details:', err);
+    res.status(500).send('Internal Server Error');
+  }
+};
+
+
+module.exports={getBlogDetails,getPendingBlogsPage,approveBlog,getAllPublicApprovedBlogs,createBlog,getBlog,getPendingBlogs,getblogPage,getAddSectorPage,addSector,myBlogsPage,getApprovedBlogsPage}

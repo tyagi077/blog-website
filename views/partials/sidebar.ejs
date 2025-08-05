@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard - Blogify</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    .dashboard {
+      display: flex;
+    }
+
+    .sidebar {
+      width: 220px;
+      background-color: #2c3e50;
+      color: white;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      padding-top: 20px;
+    }
+
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+    }
+
+    .sidebar-menu li {
+      padding: 10px 20px;
+    }
+
+    .sidebar-menu li a {
+      color: white;
+      text-decoration: none;
+      display: block;
+    }
+
+    .sidebar-menu li a:hover {
+      background-color: #34495e;
+      border-radius: 4px;
+    }
+
+    .main-content {
+      margin-left: 220px; /* same as sidebar width */
+      padding: 20px;
+      flex: 1;
+    }
+
+    hr {
+      border-color: #7f8c8d;
+      margin: 15px 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="dashboard">
+  <aside class="sidebar">
+    <ul class="sidebar-menu">
+      <li><a href="/blogs/allBlogs">📚 All Blogs</a></li>
+      <li><a href="/blogs/create-blog">✍️ Create Blog</a></li>
+      <li><a href="/blogs/my-blogs">📝 My Blogs</a></li>
+      <li><a href="/users/profile">👤 Profile</a></li>
+      <li><a href="/users/logout">🚪 Logout</a></li>
+
+      <% if (user && user.role === 'admin') { %>
+        <hr />
+        <li><a href="/users/add-user">➕ Add User</a></li>
+        <li><a href="/blogs/add-sector">📌 Add Sector</a></li>
+        <li><a href="/blogs/approved-blogs">🕓 Pending Blogs</a></li>
+        <li><a href="/users">👥 All Users</a></li>
+      <% } %>
+    </ul>
+  </aside>
+
+  
+</div>
+
+</body>
+</html>
