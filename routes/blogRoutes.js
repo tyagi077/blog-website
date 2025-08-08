@@ -1,5 +1,5 @@
 const express = require("express");
-const { createBlog, getBlog, getPendingBlogs, getblogPage, getAddSectorPage, addSector, myBlogsPage, getApprovedBlogsPage, getAllPublicApprovedBlogs, getPendingBlogsPage, approveBlog, getBlogDetails } = require("../controller/blogController");
+const { createBlog, getBlog, getPendingBlogs, getblogPage, getAddSectorPage, addSector, myBlogsPage, getApprovedBlogsPage, getAllPublicApprovedBlogs, getPendingBlogsPage, approveBlog, getBlogDetails, editBlogsPage, updateBlog } = require("../controller/blogController");
 const authenticate = require("../middleware/userMiddleware");
 const upload = require('../uploads/upload');
 const blogRouter = express();
@@ -14,7 +14,10 @@ blogRouter.get('/my-blogs',authenticate,myBlogsPage);
 blogRouter.get('/allBlogs',authenticate,getAllPublicApprovedBlogs);
 blogRouter.get('/approved-blogs', authenticate, getPendingBlogsPage);
 blogRouter.post('/approve/:id', authenticate, approveBlog);
-blogRouter.get('/blogs/:id', authenticate,getBlogDetails);
+blogRouter.get('/blogs/:id',getBlogDetails);
+blogRouter.get('/edit/:id', authenticate,editBlogsPage);
+blogRouter.post('/blogs/update/:id', upload.single('image'),updateBlog);
+
 
 
 module.exports=blogRouter

@@ -4,9 +4,8 @@ const { Blog, Sector, User } = require('../models');
 
 const UserSector = require('../models/UserSector');
 
-
 const getBlog = async (req, res) => {
-   try {
+  try {
     const userId = req.user.id;
     const userRole = req.user.role;
 
@@ -88,6 +87,8 @@ const getPendingBlogs = async (req, res) => {
       ]
     });
 
+    console.log(pendingBlogs);
+
     res.status(200).json({ pendingBlogs });
 
   } catch (err) {
@@ -95,7 +96,6 @@ const getPendingBlogs = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch pending blogs', details: err.message });
   }
 };
-
 
 const getPendingBlogsPage = async (req, res) => {
   try {
@@ -119,7 +119,11 @@ const getPendingBlogsPage = async (req, res) => {
     const blogs = await Blog.findAll({
       where: {
         approved_by: null,
-        sector_id: sectorIds
+        sector_id: sectorIds,
+        scope: {
+          [Op.eq]: 'public'  // This is case-sensitive
+        }
+
       },
       include: [
         { model: Sector },
@@ -137,7 +141,6 @@ const getPendingBlogsPage = async (req, res) => {
 
 const approveBlog = async (req, res) => {
   try {
-    console.log("sasa");
     const blogId = req.params.id;
     const adminId = req.user?.id;
     const adminRole = req.user?.role;
@@ -168,6 +171,33 @@ const approveBlog = async (req, res) => {
   }
 };
 
+const editBlogsPage = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // Get the blog to edit
+    const blog = await Blog.findOne({ where: { id }, include: [Sector] });
+
+    if (!blog) {
+      return res.status(404).send("Blog not found");
+    }
+
+    // Get all sectors (for the dropdown)
+    const sectors = await Sector.findAll();
+
+    // Render the blog form with blog pre-filled
+    res.render('createBlog', {
+      blog,
+      sectors,
+      user: req.user
+    });
+
+  } catch (err) {
+    console.error("Error loading blog for editing:", err);
+    res.status(500).send("Failed to load edit page");
+  }
+};
+
 
 
 const createBlog = async (req, res) => {
@@ -192,7 +222,7 @@ const createBlog = async (req, res) => {
       updated_by
     });
 
-  res.redirect('/blogs/allBlogs');
+    res.redirect('/blogs/allBlogs');
   } catch (err) {
     res.status(500).json({ error: 'Internal Server Error', details: err.message });
   }
@@ -200,10 +230,10 @@ const createBlog = async (req, res) => {
 
 
 // Route to render the blog creation form
-const getblogPage= async (req, res) => {
+const getblogPage = async (req, res) => {
   try {
     const sectors = await Sector.findAll(); // fetch sectors to populate the dropdown
-    res.render('createBlog', { sectors,user:req.user });
+    res.render('createBlog', { blog: null, sectors, user: req.user });
   } catch (err) {
     console.error(err);
     res.status(500).send("Failed to load blog form");
@@ -234,7 +264,7 @@ const addSector = async (req, res) => {
 
 const myBlogsPage = async (req, res) => {
   try {
-    const userId =req.user.id // Assuming user is available from middleware
+    const userId = req.user.id // Assuming user is available from middleware
 
     const blogs = await Blog.findAll({
       where: { user_id: userId },
@@ -277,7 +307,7 @@ const getApprovedBlogsPage = async (req, res) => {
 };
 
 
-const getAllPublicApprovedBlogs= async (req, res) => {
+const getAllPublicApprovedBlogs = async (req, res) => {
   try {
     const blogs = await Blog.findAll({
       where: {
@@ -325,5 +355,26 @@ const getBlogDetails = async (req, res) => {
   }
 };
 
+const updateBlog = async (req, res) => {
+  try {
+    console.log(req.body);
+    const blogId = req.params.id;
+    const { title, content, scope, sector_id } = req.body;
 
-module.exports={getBlogDetails,getPendingBlogsPage,approveBlog,getAllPublicApprovedBlogs,createBlog,getBlog,getPendingBlogs,getblogPage,getAddSectorPage,addSector,myBlogsPage,getApprovedBlogsPage}
+    const updated = await Blog.update(
+      { title, content, scope, sector_id },
+      { where: { id: blogId } }
+    );
+
+    if (updated[0] === 0) {
+      return res.status(404).json({ message: 'Blog not found or no changes made' });
+    }
+
+    res.redirect('/blogs/my-blogs'); // or wherever you want to redirect
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to update blog', error: error.message });
+  }
+};
+
+module.exports = { updateBlog, editBlogsPage, getBlogDetails, getPendingBlogsPage, approveBlog, getAllPublicApprovedBlogs, createBlog, getBlog, getPendingBlogs, getblogPage, getAddSectorPage, addSector, myBlogsPage, getApprovedBlogsPage }

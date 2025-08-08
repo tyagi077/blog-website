@@ -22,7 +22,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
 // Routes
 app.use('/users', userRouter);
 app.use('/blogs', blogRouter);

@@ -2,8 +2,10 @@ const User = require('../models/User');
 const { Sector } = require('../models');
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = 'your_jwt_secret_key';
-const UserSector=require("../models/UserSector")
-const createPost= async (req, res) => {
+const fs = require('fs');
+const path = require('path');
+const UserSector = require("../models/UserSector")
+const createPost = async (req, res) => {
   try {
     const { name, email, password, image, role, created_by } = req.body;
 
@@ -28,7 +30,7 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     // Find user by email
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({ where: { email, is_deleted: false } });
 
     if (!user || user.password !== password) {
       return res.status(401).render('login', {
@@ -107,7 +109,7 @@ const createUser = async (req, res) => {
       console.log("✅ Sector links inserted");
     }
 
-    res.redirect('/users/add-user');
+    res.redirect('/users/users');
   } catch (err) {
     console.error("❌ Error creating user:", err);
     res.status(500).send('Failed to create user');
@@ -115,14 +117,14 @@ const createUser = async (req, res) => {
 };
 
 
- const loginPage=async (req,res)=>{
-      res.render('login',{user:null})
-    };
+const loginPage = async (req, res) => {
+  res.render('login', { user: null })
+};
 
 
-const addUserPage= async (req, res) => {
+const addUserPage = async (req, res) => {
   const sectors = await Sector.findAll();
-  res.render('addUser', { sectors , user:req.user });
+  res.render('addUser', { editUser: null, userSectors: null, sectors, user: req.user });
 };
 const logout = (req, res) => {
   res.clearCookie('token'); // remove JWT token cookie
@@ -130,7 +132,7 @@ const logout = (req, res) => {
 };
 
 const profile = async (req, res) => {
-    try {
+  try {
     const user = await User.findOne({
       where: { id: req.user.id },
       include: [{ model: Sector, as: 'sectors' }] // ✅ use the correct alias
@@ -143,5 +145,169 @@ const profile = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+const getAllRegularUsers = async (req, res) => {
+  try {
+    const users = await User.findAll({
+      where: {
+        role: 'user',
+        is_deleted: false
+      },
+      attributes: { exclude: ['password'] }
+    });
+    res.render('users', { users, user: req.user });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Failed to fetch users',
+      error: error.message,
+    });
+  }
+};
 
-module.exports = {profile,logout,createUser,createPost,loginPage,addUserPage,login};
+
+
+const editUserPage = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const editUser = await User.findOne({ where: { id } });
+
+    if (!editUser) {
+      return res.status(404).send("User not found");
+    }
+
+    const sectors = await Sector.findAll();
+
+    // Get sectors assigned to the user if role is admin
+    let userSectors = [];
+    if (editUser.role === 'admin') {
+      const assignedSectors = await editUser.getSectors(); // Assuming many-to-many relation
+      userSectors = assignedSectors.map(sector => sector.id);
+    }
+
+    res.render('addUser', {
+      editUser,
+      sectors,
+      userSectors,
+      user: req.user  // logged-in user, used in layout/partials
+    });
+
+  } catch (err) {
+    console.error("Error loading user for editing:", err);
+    res.status(500).send("Failed to load edit page");
+  }
+};
+
+
+
+
+const updateUser = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const user = await User.findByPk(id);
+
+    if (!user) return res.status(404).send("User not found");
+
+    const { name, role } = req.body;
+
+    // Handle image upload
+    let imagePath = user.image;
+    if (req.file) {
+      // Delete old image if exists and not default
+      if (user.image && user.image !== '/uploads/default.png') {
+        const oldImagePath = path.join(__dirname, '..', 'public', user.image);
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath);
+        }
+      }
+
+      imagePath = '/uploads/' + req.file.filename;
+    }
+
+    // Build update fields dynamically
+    const updateFields = {
+      name,
+      image: imagePath
+    };
+
+    if (role) {
+      updateFields.role = role;
+    }
+
+    // Perform the update
+    await user.update(updateFields);
+
+    res.redirect('/users/users');
+  } catch (err) {
+    console.error("Update error:", err);
+    res.status(500).send("Failed to update user");
+  }
+};
+
+
+const softDeleteUser = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.is_deleted = true;
+    await user.save();
+
+    res.redirect('/users/users'); // or respond with success
+  } catch (error) {
+    res.status(500).json({
+      message: 'Failed to delete user',
+      error: error.message,
+    });
+  }
+};
+
+const openUpdateProfilePage = async (req, res) => {
+  const id = req.user?.id;
+  const user = await User.findOne({ where: { id } });
+
+  if (!user) return res.status(404).send("User not found");
+
+  res.render('updateProfile', { user: user.get({ plain: true }) });
+}
+
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id; // Assuming `req.user` is available (via session or passport)
+    const { name, password } = req.body;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).send('User not found');
+
+    // Update fields
+    user.name = name;
+
+    if (password && password.trim() !== '') {
+      user.password = password;
+    }
+
+    // Handle profile image upload
+    if (req.file) {
+      if (user.image && user.image !== 'default.png') {
+        const oldImagePath = path.join(__dirname, '..', 'public', 'uploads', user.image);
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath);
+        }
+
+      }
+      user.image = '/uploads/' + req.file.filename;
+    }
+
+    await user.save();
+
+    res.redirect('/users/profile'); // redirect to updated profile page
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).send('Failed to update profile');
+  }
+};
+
+module.exports = { updateProfile, openUpdateProfilePage, updateUser, editUserPage, softDeleteUser, getAllRegularUsers, profile, logout, createUser, createPost, loginPage, addUserPage, login };

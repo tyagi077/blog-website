@@ -23,4 +23,4 @@ Sector.belongsToMany(User, {
   otherKey: 'user_id',
   as: 'users'
 });
-module.exports = { Blog, Sector, User,UserSector };
+module.exports = { Blog, Sector, User, UserSector };

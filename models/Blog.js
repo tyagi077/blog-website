@@ -22,9 +22,9 @@ const Blog = sequelize.define('Blog', {
     type: DataTypes.INTEGER
   },
   is_approved: {
-  type: DataTypes.BOOLEAN,
-  defaultValue: false
-},
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
   user_id: {
     type: DataTypes.INTEGER,
     allowNull: false
@@ -33,9 +33,9 @@ const Blog = sequelize.define('Blog', {
     type: DataTypes.STRING,
     defaultValue: 'public'
   },
-  approved_by:{
-    type:DataTypes.INTEGER,
-    allowNull:true
+  approved_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true
   },
   updated_by: {
     type: DataTypes.INTEGER
