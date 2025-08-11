@@ -70,15 +70,16 @@
       <li><a href="/blogs/create-blog">✍️ Create Blog</a></li>
       <li><a href="/blogs/my-blogs">📝 My Blogs</a></li>
       <li><a href="/users/profile">👤 Profile</a></li>
-      <li><a href="/users/logout">🚪 Logout</a></li>
-
-      <% if (user && user.role === 'admin') { %>
-        <hr />
+      <% if (user && user.role === 'admin' || user.role==='superadmin') { %>
         <li><a href="/users/add-user">➕ Add User</a></li>
-        <li><a href="/blogs/add-sector">📌 Add Sector</a></li>
         <li><a href="/blogs/approved-blogs">🕓 Pending Blogs</a></li>
         <li><a href="/users/users">👥 All Users</a></li>
       <% } %>
+      <% if ( user.role==='superadmin') { %>
+        <li><a href="/blogs/add-sector">📌 Add Sector</a></li>
+      <% } %>
+       <li><a href="/users/logout">🚪 Logout</a></li>
+
     </ul>
   </aside>
 

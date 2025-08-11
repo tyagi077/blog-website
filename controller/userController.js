@@ -5,6 +5,8 @@ const JWT_SECRET = 'your_jwt_secret_key';
 const fs = require('fs');
 const path = require('path');
 const UserSector = require("../models/UserSector")
+const { Op } = require('sequelize');
+
 const createPost = async (req, res) => {
   try {
     const { name, email, password, image, role, created_by } = req.body;
@@ -24,7 +26,6 @@ const createPost = async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 };
-
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -60,7 +61,6 @@ const login = async (req, res) => {
     res.status(500).render('login', { error: 'Server error', user: null });
   }
 };
-
 const createUser = async (req, res) => {
   try {
     console.log("🔥 Incoming createUser request");
@@ -115,13 +115,9 @@ const createUser = async (req, res) => {
     res.status(500).send('Failed to create user');
   }
 };
-
-
 const loginPage = async (req, res) => {
   res.render('login', { user: null })
 };
-
-
 const addUserPage = async (req, res) => {
   const sectors = await Sector.findAll();
   res.render('addUser', { editUser: null, userSectors: null, sectors, user: req.user });
@@ -130,7 +126,6 @@ const logout = (req, res) => {
   res.clearCookie('token'); // remove JWT token cookie
   res.redirect('/users/login'); // redirect to login page
 };
-
 const profile = async (req, res) => {
   try {
     const user = await User.findOne({
@@ -145,25 +140,36 @@ const profile = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+
 const getAllRegularUsers = async (req, res) => {
   try {
+    let whereConditions = { is_deleted: false };
+
+    if (req.user.role === 'admin') {
+      // Admins see only users
+      whereConditions.role = 'user';
+    } else if (req.user.role === 'superadmin') {
+       
+      whereConditions.role = { [Op.in]: ['user', 'admin'] };
+    }
+
     const users = await User.findAll({
-      where: {
-        role: 'user',
-        is_deleted: false
-      },
+      where: whereConditions,
       attributes: { exclude: ['password'] }
     });
+
+    console.log('Found users:', users.map(u => u.toJSON()));
+
     res.render('users', { users, user: req.user });
+
   } catch (error) {
+    console.error('Error fetching users:', error);
     res.status(500).json({
       message: 'Failed to fetch users',
       error: error.message,
     });
   }
 };
-
-
 
 const editUserPage = async (req, res) => {
   try {
@@ -196,10 +202,6 @@ const editUserPage = async (req, res) => {
     res.status(500).send("Failed to load edit page");
   }
 };
-
-
-
-
 const updateUser = async (req, res) => {
   try {
     const id = req.params.id;
@@ -242,8 +244,6 @@ const updateUser = async (req, res) => {
     res.status(500).send("Failed to update user");
   }
 };
-
-
 const softDeleteUser = async (req, res) => {
   try {
     const userId = req.params.id;
@@ -264,7 +264,6 @@ const softDeleteUser = async (req, res) => {
     });
   }
 };
-
 const openUpdateProfilePage = async (req, res) => {
   const id = req.user?.id;
   const user = await User.findOne({ where: { id } });
@@ -273,7 +272,6 @@ const openUpdateProfilePage = async (req, res) => {
 
   res.render('updateProfile', { user: user.get({ plain: true }) });
 }
-
 const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id; // Assuming `req.user` is available (via session or passport)

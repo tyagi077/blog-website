@@ -62,7 +62,10 @@
               <label for="role" class="form-label">Role:</label>
               <select id="role" name="role" class="form-select" required onchange="toggleSectorDropdown()">
                 <option value="user" <%= editUser?.role === 'user' ? 'selected' : '' %>>User</option>
-                <option value="admin" <%= editUser?.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                
+               <%if(user?.role=='superadmin'){%>
+                 <option value="admin" <%= editUser?.role === 'admin' ? 'selected' : '' %>>Admin</option>
+             <%}%>
               </select>
             </div>
 

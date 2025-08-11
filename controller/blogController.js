@@ -12,7 +12,6 @@ const getBlog = async (req, res) => {
     let blogs;
 
     if (userRole === 'admin') {
-      // Get sectors where admin is assigned
       const userSectors = await UserSector.findAll({
         where: { user_id: userId },
         attributes: ['sector_id']
@@ -63,7 +62,7 @@ const getPendingBlogs = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    if (userRole !== 'admin') {
+    if (userRole == 'user'  ) {
       return res.status(403).json({ error: 'Access denied. Only admins can view pending blogs.' });
     }
 
@@ -97,6 +96,8 @@ const getPendingBlogs = async (req, res) => {
   }
 };
 
+
+
 const getPendingBlogsPage = async (req, res) => {
   try {
     console.log("Logged-in user:", req.user);
@@ -104,40 +105,46 @@ const getPendingBlogsPage = async (req, res) => {
     const adminId = req.user?.id;
     const adminRole = req.user?.role;
 
-    if (adminRole !== 'admin') {
+    if (adminRole === 'user') {
       return res.status(403).send('Access denied');
     }
 
-    const assignedSectors = await UserSector.findAll({
-      where: { user_id: adminId },
-      attributes: ['sector_id']
-    });
-    const sectorIds = assignedSectors.map(s => s.sector_id);
-    console.log("Assigned Sectors:", assignedSectors);
-    console.log("Extracted Sector IDs:", sectorIds);
+    let whereCondition = {
+      approved_by: null,
+      scope: 'public'
+    };
+
+    if (adminRole !== 'superadmin') {
+      // Get sectors assigned to admin
+      const assignedSectors = await UserSector.findAll({
+        where: { user_id: adminId },
+        attributes: ['sector_id']
+      });
+      const sectorIds = assignedSectors.map(s => s.sector_id);
+
+      whereCondition.sector_id = sectorIds.length > 0 ? { [Op.in]: sectorIds } : null;
+      // If no sectors assigned, sector_id will be null → no blogs
+    }
+    // If superadmin, no sector filter → sees all pending blogs
 
     const blogs = await Blog.findAll({
-      where: {
-        approved_by: null,
-        sector_id: sectorIds,
-        scope: {
-          [Op.eq]: 'public'  // This is case-sensitive
-        }
-
-      },
+      where: whereCondition,
       include: [
         { model: Sector },
         { model: User, attributes: ['name'] }
       ]
     });
+
     console.log("Pending Blogs:", blogs);
 
     res.render('approvedBlogs', { blogs, user: req.user });
+
   } catch (err) {
     console.error("Error fetching pending blogs:", err);
     res.status(500).send("Internal Server Error");
   }
 };
+
 
 const approveBlog = async (req, res) => {
   try {
@@ -145,7 +152,7 @@ const approveBlog = async (req, res) => {
     const adminId = req.user?.id;
     const adminRole = req.user?.role;
 
-    if (adminRole !== 'admin') {
+    if (adminRole == 'user') {
       return res.status(403).send('Only admins can approve blogs');
     }
 
@@ -212,6 +219,22 @@ const createBlog = async (req, res) => {
       return res.status(400).json({ error: 'User not authenticated' });
     }
 
+   const userSectors = await UserSector.findAll({
+    where:{
+      user_id
+    },
+    attributes:['sector_id'],
+    raw:true
+   })
+
+   const userSectorIds = userSectors.map(us=>us.sector_id);
+
+   const isApproved=userSectorIds.includes(Number(sector_id));
+   const approved_by=isApproved? user_id:null;
+
+
+    
+
     const blog = await Blog.create({
       title,
       description,
@@ -219,8 +242,12 @@ const createBlog = async (req, res) => {
       sector_id,
       user_id,
       scope,
-      updated_by
+      updated_by,
+      is_approved:isApproved,
+      approved_by
     });
+
+    
 
     res.redirect('/blogs/allBlogs');
   } catch (err) {
@@ -254,13 +281,25 @@ const addSector = async (req, res) => {
       return res.status(400).send('Sector already exists');
     }
 
-    await Sector.create({ name });
-    res.redirect('/blogs/allBlogs'); // or res.redirect('/dashboard/add-sector') to show form again
+    // Create new sector
+    const newSector = await Sector.create({ name });
+
+    // If logged-in user is superadmin, assign this sector to them
+    if (req.user.role === 'superadmin') {
+      await UserSector.create({
+        user_id: req.user.id,
+        sector_id: newSector.id
+      });
+    }
+
+    res.redirect('/blogs/allBlogs'); // or redirect as needed
+
   } catch (error) {
     console.error('Error adding sector:', error);
     res.status(500).send('Internal Server Error');
   }
 };
+
 
 const myBlogsPage = async (req, res) => {
   try {
@@ -292,6 +331,7 @@ const getApprovedBlogsPage = async (req, res) => {
         user_id: loggedInUserId,
         approved_by: { [Op.ne]: null }
       },
+      
       include: [
         { model: Sector },
         { model: User, as: 'Approver', attributes: ['name'] },  // Approver info
