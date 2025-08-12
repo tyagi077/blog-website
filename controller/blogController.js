@@ -72,6 +72,7 @@ const getPendingBlogs = async (req, res) => {
       attributes: ['sector_id']
     });
 
+    // doing this to convert objects of array to array (coz findall return objects of array)
     const sectorIds = userSectors.map(us => us.sector_id);
 
     // Get unapproved blogs in those sectors
@@ -86,7 +87,6 @@ const getPendingBlogs = async (req, res) => {
       ]
     });
 
-    console.log(pendingBlogs);
 
     res.status(200).json({ pendingBlogs });
 
@@ -96,11 +96,8 @@ const getPendingBlogs = async (req, res) => {
   }
 };
 
-
-
 const getPendingBlogsPage = async (req, res) => {
   try {
-    console.log("Logged-in user:", req.user);
 
     const adminId = req.user?.id;
     const adminRole = req.user?.role;
@@ -145,7 +142,6 @@ const getPendingBlogsPage = async (req, res) => {
   }
 };
 
-
 const approveBlog = async (req, res) => {
   try {
     const blogId = req.params.id;
@@ -169,6 +165,7 @@ const approveBlog = async (req, res) => {
     }
 
     blog.approved_by = adminId;
+    blog.is_approved=true;
     await blog.save();
 
     res.redirect('/blogs/approved-blogs');
