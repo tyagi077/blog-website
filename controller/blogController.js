@@ -300,7 +300,6 @@ const addSector = async (req, res) => {
   }
 };
 
-
 const myBlogsPage = async (req, res) => {
   try {
     const userId = req.user.id // Assuming user is available from middleware

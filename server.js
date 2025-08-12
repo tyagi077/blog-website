@@ -10,12 +10,11 @@ const Blog = require('./models/Blog');
 const Sector = require('./models/Sector');
 const User = require('./models/User');
 
-const { Op } = require('sequelize');
-const { error } = require("console");
+const publicBlogMiddleware = require("./middleware/publicBlogMiddleware");
+const { rootPage } = require("./controller/userController");
 
 
 // View & Static
-
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -23,54 +22,26 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 // Routes
+app.get('/',publicBlogMiddleware,rootPage)
 app.use('/users', userRouter);
 app.use('/blogs', blogRouter);
-
-// 🔁 Define associations
-Blog.belongsTo(Sector, { foreignKey: 'sector_id' });
-Blog.belongsTo(User, { foreignKey: 'user_id' });
 
 // DB connection & server start
 const PORT = 3000;
 (async () => {
   try {
     await sequelize.authenticate();
-    console.log('✅ Connected to PostgreSQL');
+    console.log('Connected to PostgreSQL');
 
     await sequelize.sync();
-    console.log('✅ Tables synced');
+    console.log('Tables synced');
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+      console.log(`Server running on http://localhost:${PORT}`);
     });
   } catch (err) {
-    console.error('❌ Failed to start server:', err);
+    console.error('Failed to start server:', err);
   }
 })();
 
-// 🏠 Home Route
-app.get('/', async (req, res) => {
-  try {
-    const blogs = await Blog.findAll({
-      where: {
-        scope: 'public',
-        approved_by: { [Op.ne]: null }
-      },
-      include: [
-        {
-          model: Sector,
-          attributes: ['id', 'name']
-        },
-        {
-          model: User,
-          attributes: ['id', 'name']
-        }
-      ]
-    });
 
-    res.render('home', { blogs, user: req.user });
-  } catch (err) {
-    console.error('❌ Error in GET /:', err);
-    res.status(500).send('Error loading homepage');
-  }
-});

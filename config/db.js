@@ -7,3 +7,5 @@ const sequelize = new Sequelize('blog', 'postgres', 'root', {
 });
 
 module.exports = sequelize;
+
+

@@ -1,5 +1,5 @@
 const User = require('../models/User');
-const { Sector } = require('../models');
+const { Sector, Blog } = require('../models');
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = 'your_jwt_secret_key';
 const fs = require('fs');
@@ -308,4 +308,34 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { updateProfile, openUpdateProfilePage, updateUser, editUserPage, softDeleteUser, getAllRegularUsers, profile, logout, createUser, createPost, loginPage, addUserPage, login };
+const rootPage= async (req, res) => {
+  try {
+    const blogs = await Blog.findAll({
+      where: {
+        scope: 'public',
+        approved_by: { [Op.ne]: null }
+      },
+      include: [
+        {
+          model: Sector,
+          attributes: ['id', 'name']
+        },
+        {
+          model: User,
+          attributes: ['id', 'name']
+        }
+      ]
+    });
+    if(req.user){
+ res.render('blogs', { blogs, user: req.user });
+    }else{
+ res.render('home', { blogs, user: req.user });
+    }
+
+   
+  } catch (err) {
+    console.error('❌ Error in GET /:', err);
+    res.status(500).send('Error loading homepage');
+  }
+};
+module.exports = { rootPage,updateProfile, openUpdateProfilePage, updateUser, editUserPage, softDeleteUser, getAllRegularUsers, profile, logout, createUser, createPost, loginPage, addUserPage, login };
